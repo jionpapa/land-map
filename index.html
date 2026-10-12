@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1f6f43">
 <title>내 땅 지도</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <style>
 :root{--g:#1f6f43;--g2:#e7f3ec;--o:#e8710a;--bg:#fff;--fg:#1d1d1f;--mut:#6b6b70;--line:#e3e3e6;--card:#fff;--sh:0 4px 18px rgba(0,0,0,.16)}
 @media (prefers-color-scheme:dark){:root{--bg:#18191b;--fg:#f2f2f3;--mut:#a3a3a8;--line:#333438;--card:#232427;--g2:#1d3327}}
@@ -24,6 +27,12 @@ button{font:inherit;cursor:pointer}
 .chips{position:fixed;right:10px;top:calc(66px + env(safe-area-inset-top));z-index:9;display:flex;flex-direction:column;gap:6px}
 .chip{border:0;border-radius:20px;padding:7px 12px;background:var(--card);color:var(--fg);box-shadow:var(--sh);font-size:13px}
 .chip.on{background:var(--g);color:#fff}
+.chip.loc.on{background:#1a73e8}
+.chip.loc.idle{background:var(--card);color:#1a73e8;box-shadow:var(--sh),inset 0 0 0 2px #1a73e8}
+.me{position:relative;width:18px;height:18px}
+.me i{position:absolute;inset:0;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45)}
+.me b{position:absolute;inset:-9px;border-radius:50%;background:rgba(26,115,232,.35);animation:mepulse 2s ease-out infinite}
+@keyframes mepulse{0%{transform:scale(.4);opacity:1}100%{transform:scale(1.4);opacity:0}}
 .hint{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));z-index:9;background:rgba(0,0,0,.72);color:#fff;padding:7px 12px;border-radius:16px;font-size:13px;white-space:nowrap;pointer-events:none;transition:opacity .4s}
 .fab{position:fixed;left:10px;right:10px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:9;border:0;border-radius:14px;background:var(--g);color:#fff;padding:14px;font-weight:700;box-shadow:var(--sh);font-size:16px}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--card);border-radius:18px 18px 0 0;box-shadow:0 -4px 22px rgba(0,0,0,.2);padding:8px 16px calc(16px + env(safe-area-inset-bottom));max-height:78vh;overflow:auto;transform:translateY(105%);transition:transform .25s}
@@ -69,11 +78,12 @@ textarea.f{min-height:64px;resize:vertical}
 </div>
 <div class="results" id="results"></div>
 <div class="chips">
+  <button class="chip loc" id="locBtn">내 위치</button>
   <button class="chip" id="cadBtn">지적도</button>
   <button class="chip" id="satBtn">위성</button>
   <button class="chip" id="allBtn">전체보기</button>
 </div>
-<div class="hint" id="hint">주소를 검색하거나 지도에서 필지를 길게 누르세요</div>
+<div class="hint" id="hint">주소 검색, 필지 길게 누르기, ‘내 위치’로 시작하세요</div>
 <button class="fab" id="listBtn">내 땅 목록 (0)</button>
 
 <div class="dim" id="dim"></div>
@@ -136,6 +146,8 @@ $("impFile").onchange=function(e){
   r.readAsText(f);e.target.value="";
 };
 
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
+
 /* ---------- 카카오 SDK ---------- */
 if(!keys.kakao||!keys.vworld){openSetup()}else{loadKakao()}
 function loadKakao(){
@@ -153,6 +165,7 @@ function init(){
   if(parcels.length)fitAll();
   // 길게 누르기(우클릭)·짧게 탭 → 필지 선택
   var pressT=null,downPos=null;
+  kakao.maps.event.addListener(map,"dragstart",locUnfollow);
   kakao.maps.event.addListener(map,"rightclick",function(e){pickAt(e.latLng)});
   kakao.maps.event.addListener(map,"click",function(e){ if(cadOn) pickAt(e.latLng) });
   var el=$("map");
@@ -260,7 +273,7 @@ function showPreview(f){
   var d=parseFeature(f);
   var existing=parcels.filter(function(p){return p.pnu===d.pnu})[0];
   if(existing){focusParcel(existing);return}
-  setSel(null);clearPreview();
+  setSel(null);clearPreview();locUnfollow();
   preview={data:d,polys:makePolys(d.geom,"#e8710a",.28)};
   map.setBounds(boundsOf([d.geom]),60,40,260,40);
   draft={nm:"",mm:""};
@@ -299,12 +312,12 @@ function drawOne(p){
 }
 function drawAll(){Object.keys(shapes).forEach(function(id){shapes[id].polys.forEach(function(p){p.setMap(null)});shapes[id].ov.setMap(null)});shapes={};parcels.forEach(drawOne)}
 function updateCount(){$("listBtn").textContent="내 땅 목록 ("+parcels.length+")"}
-function fitAll(){if(!parcels.length){toast("저장된 땅이 없습니다");return}map.setBounds(boundsOf(parcels.map(function(p){return p.geom})),60,40,120,40)}
+function fitAll(){locUnfollow();if(!parcels.length){toast("저장된 땅이 없습니다");return}map.setBounds(boundsOf(parcels.map(function(p){return p.geom})),60,40,120,40)}
 $("allBtn").onclick=function(){if(map)fitAll()};
 
 function selectSaved(p){setSel({kind:"saved",id:p.id,title:p.name||p.jibun||"내 땅",sub:p.addr+" · 약 "+pyeong(p.area)+"평",reopen:function(){savedSheet(p)}})}
 function focusParcel(p){
-  map.setBounds(boundsOf([p.geom]),60,40,280,40);
+  locUnfollow();map.setBounds(boundsOf([p.geom]),60,40,280,40);
   selectSaved(p);savedSheet(p);
 }
 function savedSheet(p){
@@ -340,6 +353,49 @@ $("cadBtn").onclick=function(){if(!map)return;cadOn=!cadOn;this.classList.toggle
   cadOn?map.addOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT):map.removeOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT);
   if(cadOn)toast("지적도가 켜진 동안은 필지를 한 번 탭해도 선택됩니다")};
 $("satBtn").onclick=function(){if(!map)return;satOn=!satOn;this.classList.toggle("on",satOn);map.setMapTypeId(satOn?kakao.maps.MapTypeId.HYBRID:kakao.maps.MapTypeId.ROADMAP)};
+
+/* ---------- 내 위치 (실시간) ---------- */
+// 꺼짐 → [탭] 켜짐+따라가기 → 지도를 움직이면 따라가기만 해제 → [탭] 다시 내 위치로
+// 따라가는 중에 [탭]하면 위치 표시를 끕니다.
+var loc={watch:null,pos:null,dot:null,ring:null,follow:false,first:true};
+function locChip(){var b=$("locBtn");b.classList.toggle("on",loc.watch!==null&&loc.follow);b.classList.toggle("idle",loc.watch!==null&&!loc.follow)}
+function locStop(){
+  if(loc.watch!==null)navigator.geolocation.clearWatch(loc.watch);
+  loc.watch=null;loc.follow=false;loc.pos=null;loc.paused=false;
+  if(loc.dot)loc.dot.setMap(null);if(loc.ring)loc.ring.setMap(null);loc.dot=loc.ring=null;locChip();
+}
+function locUpdate(p){
+  var ll=new kakao.maps.LatLng(p.coords.latitude,p.coords.longitude),acc=Math.min(p.coords.accuracy||0,2000);
+  loc.pos=ll;
+  if(!loc.dot){var el=document.createElement("div");el.className="me";el.innerHTML="<b></b><i></i>";
+    loc.dot=new kakao.maps.CustomOverlay({map:map,position:ll,content:el,xAnchor:.5,yAnchor:.5,zIndex:5});
+    loc.ring=new kakao.maps.Circle({map:map,center:ll,radius:acc,strokeWeight:1,strokeColor:"#1a73e8",strokeOpacity:.5,fillColor:"#1a73e8",fillOpacity:.1});
+  }else{loc.dot.setPosition(ll);loc.ring.setPosition(ll);loc.ring.setRadius(acc)}
+  if(loc.first){loc.first=false;if(map.getLevel()>4)map.setLevel(4);map.setCenter(ll)}
+  else if(loc.follow)map.panTo(ll);
+}
+function locErr(e){
+  var m=e&&e.code===1?"위치 권한이 꺼져 있습니다. 휴대폰 설정에서 이 앱의 위치 권한을 허용해 주세요"
+       :e&&e.code===3?"위치를 잡는 중입니다. 잠시 후 다시 시도해 주세요":"현재 위치를 찾지 못했습니다";
+  toast(m,4500);if(e&&e.code===1)locStop();
+}
+$("locBtn").onclick=function(){
+  if(!map)return;
+  if(!navigator.geolocation){toast("이 기기에서는 위치를 쓸 수 없습니다");return}
+  if(loc.watch===null){
+    loc.follow=true;loc.first=true;locChip();toast("현재 위치를 찾는 중…",1500);
+    loc.watch=navigator.geolocation.watchPosition(locUpdate,locErr,{enableHighAccuracy:true,maximumAge:5000,timeout:20000});
+  }else if(!loc.follow){
+    loc.follow=true;locChip();if(loc.pos){if(map.getLevel()>4)map.setLevel(4);map.panTo(loc.pos)}
+  }else{locStop();toast("내 위치 표시를 껐습니다",1500)}
+};
+function locUnfollow(){if(loc.follow){loc.follow=false;locChip()}}
+document.addEventListener("visibilitychange",function(){
+  // 화면을 끄거나 다른 앱으로 가면 배터리를 위해 잠시 멈췄다가, 돌아오면 다시 켭니다
+  if(loc.watch===null&&!loc.paused)return;
+  if(document.hidden){if(loc.watch!==null){navigator.geolocation.clearWatch(loc.watch);loc.watch=null;loc.paused=true}}
+  else if(loc.paused){loc.paused=false;loc.watch=navigator.geolocation.watchPosition(locUpdate,locErr,{enableHighAccuracy:true,maximumAge:5000,timeout:20000});locChip()}
+});
 
 /* ---------- 시트 ---------- */
 function openSheet(h){$("sheetBody").innerHTML=h;$("sheet").scrollTop=0;$("sheet").classList.add("open");$("dim").style.display="block";$("peek").style.display="none"}

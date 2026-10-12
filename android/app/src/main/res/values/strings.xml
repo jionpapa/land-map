@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">내 땅 지도</string>
+    <string name="launch_url">https://jionpapa.github.io/land-map/</string>
+    <string name="provider_authority">io.github.jionpapa.landmap.fileprovider</string>
+    <string name="asset_statements" translatable="false">
+        [{
+            \"relation\": [\"delegate_permission/common.handle_all_urls\"],
+            \"target\": {\"namespace\": \"web\", \"site\": \"https://jionpapa.github.io\"}
+        }]
+    </string>
+</resources>

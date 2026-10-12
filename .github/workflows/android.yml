@@ -1,0 +1,71 @@
+name: 안드로이드 앱(APK) 만들기
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      # 서명 키: 저장소 Secrets에 LANDMAP_KEYSTORE_B64 가 있으면 그 키를 쓰고,
+      # 없으면 이번 빌드용 임시 키를 만듭니다(임시 키로 만든 APK는 업데이트 시 지우고 다시 깔아야 함).
+      - name: 서명 키 준비
+        env:
+          KS_B64: ${{ secrets.LANDMAP_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.LANDMAP_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > android/app/release.jks
+            echo "LANDMAP_KEYSTORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+            echo "SIGN_KIND=고정 키" >> "$GITHUB_ENV"
+          else
+            keytool -genkeypair -keystore android/app/release.jks -alias landmap -keyalg RSA -keysize 2048 \
+              -validity 10000 -storepass landmap-temp -keypass landmap-temp -dname "CN=LandMap"
+            echo "LANDMAP_KEYSTORE_PASSWORD=landmap-temp" >> "$GITHUB_ENV"
+            echo "SIGN_KIND=임시 키" >> "$GITHUB_ENV"
+          fi
+
+      - name: APK 빌드
+        working-directory: android
+        run: gradle assembleRelease --no-daemon
+
+      - name: 결과 정리
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk land-map.apk
+          FP=$(keytool -list -v -keystore android/app/release.jks -alias landmap -storepass "$LANDMAP_KEYSTORE_PASSWORD" | grep 'SHA256:' | head -1 | sed 's/.*SHA256: //')
+          {
+            echo "### 내 땅 지도 APK"
+            echo "- 서명: $SIGN_KIND"
+            echo "- SHA-256 지문: \`$FP\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "FP=$FP" >> "$GITHUB_ENV"
+
+      - name: 다운로드 페이지(Release)에 올리기
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: 내 땅 지도 APK ${{ github.run_number }}
+          make_latest: "true"
+          body: |
+            휴대폰에서 아래 land-map.apk 를 눌러 받아 설치하세요.
+            서명: ${{ env.SIGN_KIND }} · SHA-256 `${{ env.FP }}`
+          files: land-map.apk

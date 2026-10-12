@@ -1,0 +1,47 @@
+plugins {
+    id "com.android.application"
+}
+
+// 서명 정보는 빌드할 때 환경변수로만 받습니다 (저장소에는 키를 두지 않음)
+def ksPath = System.getenv("LANDMAP_KEYSTORE") ?: "release.jks"
+def ksPass = System.getenv("LANDMAP_KEYSTORE_PASSWORD") ?: ""
+
+android {
+    namespace "io.github.jionpapa.landmap"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "io.github.jionpapa.landmap"
+        minSdk 21
+        targetSdk 34
+        // 버전 번호는 GitHub 빌드 번호를 그대로 씁니다 → 새 APK가 이전 것을 덮어 설치됨
+        versionCode((System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger())
+        versionName "1.0." + (System.getenv("GITHUB_RUN_NUMBER") ?: "1")
+    }
+
+    signingConfigs {
+        release {
+            storeFile file(ksPath)
+            storePassword ksPass
+            keyAlias "landmap"
+            keyPassword ksPass
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation "com.google.androidbrowserhelper:androidbrowserhelper:2.5.0"
+    implementation "com.google.androidbrowserhelper:locationdelegation:1.1.1"
+}
