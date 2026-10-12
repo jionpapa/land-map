@@ -1,6 +1,6 @@
 {
-  "name": "내 땅 지도",
-  "short_name": "내 땅 지도",
+  "name": "여주토지",
+  "short_name": "여주토지",
   "description": "소유한 땅을 지도에 표시하고 저장하는 개인용 앱",
   "id": "/land-map/",
   "start_url": "/land-map/",

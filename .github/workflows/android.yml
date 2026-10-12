@@ -35,7 +35,7 @@ jobs:
         run: |
           if [ -n "$KS_B64" ]; then
             echo "$KS_B64" | base64 -d > android/app/release.jks
-            echo "LANDMAP_KEYSTORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+            echo "LANDMAP_KEYSTORE_PASSWORD=${KS_PASS:-landmap-key}" >> "$GITHUB_ENV"
             echo "SIGN_KIND=고정 키" >> "$GITHUB_ENV"
           else
             keytool -genkeypair -keystore android/app/release.jks -alias landmap -keyalg RSA -keysize 2048 \
@@ -50,10 +50,10 @@ jobs:
 
       - name: 결과 정리
         run: |
-          cp android/app/build/outputs/apk/release/app-release.apk land-map.apk
+          cp android/app/build/outputs/apk/release/app-release.apk yeoju-land.apk
           FP=$(keytool -list -v -keystore android/app/release.jks -alias landmap -storepass "$LANDMAP_KEYSTORE_PASSWORD" | grep 'SHA256:' | head -1 | sed 's/.*SHA256: //')
           {
-            echo "### 내 땅 지도 APK"
+            echo "### 여주토지 APK"
             echo "- 서명: $SIGN_KIND"
             echo "- SHA-256 지문: \`$FP\`"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -63,9 +63,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-${{ github.run_number }}
-          name: 내 땅 지도 APK ${{ github.run_number }}
+          name: 여주토지 APK ${{ github.run_number }}
           make_latest: "true"
           body: |
-            휴대폰에서 아래 land-map.apk 를 눌러 받아 설치하세요.
+            휴대폰에서 아래 yeoju-land.apk 를 눌러 받아 설치하세요.
             서명: ${{ env.SIGN_KIND }} · SHA-256 `${{ env.FP }}`
-          files: land-map.apk
+          files: yeoju-land.apk
