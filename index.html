@@ -93,7 +93,7 @@ textarea.f{min-height:64px;resize:vertical}
 
 <div class="setup" id="setup">
   <h2>처음 설정</h2>
-  <p class="mut">키는 이 휴대폰에만 저장됩니다.</p>
+  <p class="mut">키는 이 휴대폰에만 저장됩니다. 예전에 받아 둔 백업 파일이 있으면 아래 ‘백업 불러오기’로 키와 땅 목록을 한 번에 옮길 수 있습니다.</p>
   <label>카카오 JavaScript 키</label><input class="f" id="kKey" autocomplete="off">
   <label>브이월드 인증키</label><input class="f" id="vKey" autocomplete="off">
   <label>브이월드에 등록한 서비스 URL</label><input class="f" id="vDom" autocomplete="off">
@@ -109,8 +109,10 @@ textarea.f{min-height:64px;resize:vertical}
 (function(){
 "use strict";
 var LS_KEYS="landmap.keys", LS_DATA="landmap.parcels";
-function lsGet(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
-function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){toast("저장 실패: 저장 공간을 확인하세요");return false}}
+// 여주토지 앱 안에서는 앱 자체 저장소(LandApp)에 보관 → 인터넷 사용기록을 지워도 남음
+var APP=(function(){try{return !!(window.LandApp&&LandApp.isApp())}catch(e){return false}})();
+function lsGet(k,d){try{var v=APP?LandApp.get(k):localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
+function lsSet(k,v){try{var s=JSON.stringify(v);if(APP){if(!LandApp.set(k,s))throw 0}else localStorage.setItem(k,s);return true}catch(e){toast("저장 실패: 저장 공간을 확인하세요");return false}}
 var $=function(id){return document.getElementById(id)};
 var keys=lsGet(LS_KEYS,{}), parcels=lsGet(LS_DATA,[]);
 var map,geocoder,shapes={},preview=null,cadOn=false,satOn=false;
@@ -132,8 +134,12 @@ $("saveKeys").onclick=function(){
   if(changed||!map) location.reload();
 };
 $("expBtn").onclick=function(){
-  var blob=new Blob([JSON.stringify({app:"landmap",v:1,savedAt:new Date().toISOString(),parcels:parcels},null,1)],{type:"application/json"});
-  var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="내땅지도_백업_"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();a.remove();
+  var data=JSON.stringify({app:"landmap",v:2,savedAt:new Date().toISOString(),keys:keys,parcels:parcels},null,1);
+  var name="여주토지_백업_"+new Date().toISOString().slice(0,10)+".json";
+  if(APP){var ok=false;try{ok=LandApp.saveBackup(name,data)}catch(e){}
+    toast(ok?"휴대폰 ‘다운로드’ 폴더에 저장했습니다\n"+name:"백업 저장에 실패했습니다",4000);return}
+  var blob=new Blob([data],{type:"application/json"});
+  var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();
 };
 $("impBtn").onclick=function(){$("impFile").click()};
 $("impFile").onchange=function(e){
@@ -141,7 +147,11 @@ $("impFile").onchange=function(e){
   r.onload=function(){try{var d=JSON.parse(r.result),arr=d.parcels||d;if(!Array.isArray(arr))throw 0;
     var have={};parcels.forEach(function(p){have[p.pnu]=1});var n=0;
     arr.forEach(function(p){if(p&&p.pnu&&p.geom&&!have[p.pnu]){parcels.push(p);n++}});
-    lsSet(LS_DATA,parcels);if(map)drawAll();updateCount();toast(n+"건을 불러왔습니다");
+    lsSet(LS_DATA,parcels);
+    var bk=d.keys;
+    if(bk&&bk.kakao&&bk.vworld&&(!keys.kakao||!keys.vworld)){keys={kakao:bk.kakao,vworld:bk.vworld,domain:bk.domain||location.origin};lsSet(LS_KEYS,keys);
+      toast("키와 땅 "+n+"건을 불러왔습니다. 다시 시작합니다",2000);setTimeout(function(){location.reload()},1500);return}
+    if(map)drawAll();updateCount();toast(n+"건을 불러왔습니다");
   }catch(err){toast("백업 파일 형식이 아닙니다")}};
   r.readAsText(f);e.target.value="";
 };
@@ -414,6 +424,14 @@ $("grab").onclick=closeSheet;
   sh.addEventListener("touchend",function(){if(y0===null)return;sh.style.transition="";sh.style.transform="";
     if(dy>80)closeSheet();y0=null},{passive:true});
 })();
+// 안드로이드 뒤로가기: 열린 창부터 닫고, 처리했으면 true
+window.__appBack=function(){
+  if($("setup").style.display==="block"&&keys.kakao){$("setup").style.display="none";return true}
+  if($("sheet").classList.contains("open")){closeSheet();return true}
+  if($("results").style.display==="block"){$("results").style.display="none";return true}
+  if(sel){clearSelection();return true}
+  return false;
+};
 })();
 </script>
 </body>

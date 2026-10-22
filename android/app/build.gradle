@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId "io.github.jionpapa.landmap"
-        minSdk 21
+        minSdk 24
         targetSdk 34
         // 버전 번호는 GitHub 빌드 번호를 그대로 씁니다 → 새 APK가 이전 것을 덮어 설치됨
         versionCode((System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger())
@@ -41,7 +41,3 @@ android {
     }
 }
 
-dependencies {
-    implementation "com.google.androidbrowserhelper:androidbrowserhelper:2.5.0"
-    implementation "com.google.androidbrowserhelper:locationdelegation:1.1.1"
-}
